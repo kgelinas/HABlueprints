@@ -1,111 +1,117 @@
 blueprint:
-  name: Doorbell - Notify Google and send camera snapshot to app
-  description: 'Make an announcement over Google devices when the doorbell is pushed and send a camera snapshot to your app.'
-
+  name: Doorbell Notification with Snapshot (Multiple Devices, Multiple Cameras)
+  description: Announce on Google devices and send camera snapshot to app when a doorbell is pressed.
   domain: automation
   input:
-    doorbell:
-      name: Doorbell
-      description: This is the doorbell binary sensor
+    doorbells:
+      name: Doorbells
+      description: Select the binary sensors representing your doorbells (multiple allowed).
       selector:
         entity:
+          domain: binary_sensor
           multiple: true
           filter:
             - domain: binary_sensor
     google_device:
-      name: Google
-      description: The Google device to make the announcement on. Make a comma seperated list to announce on multiple devices.
+      name: Google Devices
+      description: The Google devices to make the announcement on (multiple allowed).
       selector:
         entity:
+          domain: media_player
           multiple: true
           filter:
             - domain: media_player
       default: ""
     message:
       name: Message (Optional)
-      description: 'Default: "There is Somebody at the Door!"'
-      default: There is Somebody at the Door
-    camera:
-      name: Camera
-      description: The camera which creates the snapshot
+      description: Default: "There is Somebody at the Door!"
+      default: There is Somebody at the Door!
+    cameras:
+      name: Cameras
+      description: Select the cameras to use for snapshots (multiple allowed).
       selector:
         entity:
-          multiple: false
+          domain: camera
+          multiple: true
           filter:
             - domain: camera
-    notify_device:
-      name: Device to notify
-      description: Device needs to run the official Home Assistant app to receive notifications
+    notify_devices:
+      name: Devices to Notify (Mobile App)
+      description: Devices running the Home Assistant app to receive notifications (multiple allowed).
       selector:
         device:
-          multiple: true
           integration: mobile_app
-
-    is_ios:
-      name: Is it an iOS device?
-      description: Toggle if your selected device runs iOS, default is Android
-      selector:
-        boolean:
-      default: false
+          multiple: true
     notification_title:
       name: Notification title (Optional)
-      description: 'Default: "There is Somebody at the Door!"'
+      description: Default: "There is Somebody at the Door!"
       default: "There is Somebody at the Door!"
     notification_message:
       name: Notification message (Optional)
-      description: 'Default: "There is Somebody at the Door!"'
-      default: "There is Somebody at the Door!"      
+      description: Default: "There is Somebody at the Door!"
+      default: "There is Somebody at the Door!"
     delay:
       name: Delay (Optional)
       description: Wait before creating camera snapshot
       default: ""
       selector:
         number:
-            min: 0
-            max: 60
-            unit_of_measurement: seconds
-            mode: slider
+          min: 0
+          max: 60
+          unit_of_measurement: seconds
+          mode: slider
 
-  source_url: https://gist.github.com/seamus65/fd6d9341f0f8be76d8b81c2e3ef03624
+  trigger:
+    - platform: state
+      entity_id: "{{ trigger.platform.entity_id }}"  # Dynamic trigger entity
+      from: "off"
+      to: "on"
 
-mode: single
+  variable:
+    cameras: !input cameras
+    notify_devices: !input notify_devices
+    notification_title: !input notification_title
+    notification_message: !input notification_message
+    snapshot_create_file_path: "/config/www/tmp/snapshot_{{ trigger.platform.entity_id.split('.')[-1] }}.jpg"  # Dynamic filename
+    snapshot_access_file_path: "{{ snapshot_create_file_path | replace('/config/www','/local') }}"
 
-trigger:
-- platform: state
-  entity_id: !input 'doorbell'
-  from: "off"
-  to: "on"
+  action:
+    - service: tts.google_translate_say
+      data:
+        entity_id: "{{ input.google_device }}"
+        message: !input message
 
-variables:
-  camera: !input camera
-  notify_device: !input notify_device
-  is_ios: !input is_ios
-  notification_title: !input notification_title
-  notification_message: !input notification_message
-  delay: !input delay
-  snapshot_create_file_path: "/config/www/tmp/snapshot_{{ states[camera].object_id }}.jpg"
-  snapshot_access_file_path: "{{ snapshot_create_file_path | replace('/config/www','/local') }}"
+    - delay: "{{ delay }}"
 
-action:
-  - service: tts.google_translate_say
-    data:
-      entity_id:
-        - !input 'google_device'
-      message: !input message
+    - choose:
+        - conditions:
+            - condition: template
+              value: "{{ trigger.platform.entity_id == 'binary_sensor.doorbell_front' }}"
+            sequence:
+              - service: camera.snapshot
+                entity_id: "{{ cameras[0] }}"
+                data:
+                  filename: "{{ snapshot_create_file_path }}"
+        - conditions:
+            - condition: template
+              value: "{{ trigger.platform.entity_id == 'binary_sensor.doorbell_back' }}"
+            sequence:
+              - service: camera.snapshot
+                entity_id: "{{ cameras[1] }}"
+                data:
+                  filename: "{{ snapshot_create_file_path }}"
+        # Add more conditions for additional doorbells and cameras as needed
 
-  - delay: "{{ delay }}"
+    - template: "{{ for device in notify_devices ~ ',' if loop.index > 0 }}{{ device }}{{ endfor }}"
+      variable_name: device_list
 
-  - service: camera.snapshot
-    entity_id: !input camera
-    data:
-      filename: "{{ snapshot_create_file_path }}"
-
-  - device_id: !input notify_device
-    domain: mobile_app
-    type: notify
-    title: "{{ notification_title }}"
-    message: "{{ notification_message }}"
-    data: >
-      {% set android_data = {"image": "%s"} | format(snapshot_access_file_path) %}
-      {% set ios_data = {"attachment": {"url": "%s", "content_type": "JPEG"}} | format(snapshot_access_file_path) %}
-      {{ ios_data if is_ios else android_data }}
+    - mobile_app_notification:
+        target: "{{ device_list }}"
+        title: "{{ notification_title }}"
+        message: "{{ notification_message }}"
+        data: >-
+          {
+              "image": "%s",
+              "priority": "high",
+              "timeoutAfter": "10000"  # 10 seconds, adjust as needed
+          } | format(snapshot_access_file_path)
