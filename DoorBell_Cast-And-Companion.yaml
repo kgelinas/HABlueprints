@@ -30,7 +30,7 @@ blueprint:
       description: The camera which creates the snapshot
       selector:
         entity:
-          multiple: true
+          multiple: false
           filter:
             - domain: camera
     notify_device:
