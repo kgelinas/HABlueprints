@@ -24,7 +24,7 @@ blueprint:
       default: ""
     message:
       name: Message (Optional)
-      description:
+      description: 'Default: "There is Somebody at the Door!"'
       Default: "There is Somebody at the Door!"
     cameras:
       name: Cameras
@@ -44,11 +44,11 @@ blueprint:
           multiple: true
     notification_title:
       name: Notification title (Optional)
-      description:
+      description: 'Default: "There is Somebody at the Door!"'
       Default: "There is Somebody at the Door!"
     notification_message:
       name: Notification message (Optional)
-      description:
+      description: 'Default: "There is Somebody at the Door!"'
       Default: "There is Somebody at the Door!"
     delay:
       name: Delay (Optional)
