@@ -24,8 +24,8 @@ blueprint:
       default: ""
     message:
       name: Message (Optional)
-      description: 'Default: "There is Somebody at the Door!"'
-      Default: "There is Somebody at the Door!"
+      description: 'default: "There is Somebody at the Door!"'
+      default: "There is Somebody at the Door!"
     cameras:
       name: Cameras
       description: Select the cameras to use for snapshots (multiple allowed).
@@ -44,12 +44,12 @@ blueprint:
           multiple: true
     notification_title:
       name: Notification title (Optional)
-      description: 'Default: "There is Somebody at the Door!"'
-      Default: "There is Somebody at the Door!"
+      description: 'default: "There is Somebody at the Door!"'
+      default: "There is Somebody at the Door!"
     notification_message:
       name: Notification message (Optional)
-      description: 'Default: "There is Somebody at the Door!"'
-      Default: "There is Somebody at the Door!"
+      description: 'default: "There is Somebody at the Door!"'
+      default: "There is Somebody at the Door!"
     delay:
       name: Delay (Optional)
       description: Wait before creating camera snapshot
