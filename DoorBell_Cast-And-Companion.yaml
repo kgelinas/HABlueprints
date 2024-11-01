@@ -86,7 +86,7 @@ blueprint:
       - conditions:
           - condition: template
             value: "{{ trigger.entity_id == 'binary_sensor.doorbell_front' }}"
-          sequence:
+            sequence:
             - service: camera.snapshot
               entity_id: "{{ cameras[0] }}"
               data:
@@ -94,7 +94,7 @@ blueprint:
       - conditions:
           - condition: template
             value: "{{ trigger.entity_id == 'binary_sensor.doorbell_back' }}"
-          sequence:
+            sequence:
             - service: camera.snapshot
               entity_id: "{{ cameras[1] }}"
               data:
