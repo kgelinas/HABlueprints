@@ -12,7 +12,7 @@ blueprint:
           multiple: true
           filter:
             - domain: binary_sensor
-    google_device:
+    google_devices:
       name: Google Devices
       description: The Google devices to make the announcement on (multiple allowed).
       selector:
@@ -21,10 +21,9 @@ blueprint:
           multiple: true
           filter:
             - domain: media_player
-      default: ""
     message:
       name: Message (Optional)
-      description: 'default: "There is Somebody at the Door!"'
+      description: "Default: \"There is Somebody at the Door!\""
       default: "There is Somebody at the Door!"
     cameras:
       name: Cameras
@@ -44,11 +43,11 @@ blueprint:
           multiple: true
     notification_title:
       name: Notification title (Optional)
-      description: 'default: "There is Somebody at the Door!"'
+      description: "Default: \"There is Somebody at the Door!\""
       default: "There is Somebody at the Door!"
     notification_message:
       name: Notification message (Optional)
-      description: 'default: "There is Somebody at the Door!"'
+      description: "Default: \"There is Somebody at the Door!\""
       default: "There is Somebody at the Door!"
     delay:
       name: Delay (Optional)
@@ -62,17 +61,17 @@ blueprint:
           mode: slider
 
   trigger:
-    - platform: state
-      entity_id: "{{ trigger.platform.entity_id }}"  # Dynamic trigger entity
-      from: "off"
-      to: "on"
+  - platform: state
+    entity_id: "{{ trigger.entity_id }}"
+    from: "off"
+    to: "on"
 
   variable:
     cameras: !input cameras
     notify_devices: !input notify_devices
     notification_title: !input notification_title
     notification_message: !input notification_message
-    snapshot_create_file_path: "/config/www/tmp/snapshot_{{ trigger.platform.entity_id.split('.')[-1] }}.jpg"  # Dynamic filename
+    snapshot_create_file_path: "/config/www/tmp/snapshot_{{ trigger.entity_id.split('.')[-1] }}.jpg"
     snapshot_access_file_path: "{{ snapshot_create_file_path | replace('/config/www','/local') }}"
 
   action:
@@ -86,16 +85,16 @@ blueprint:
     - choose:
       - conditions:
           - condition: template
-            value: "{{ trigger.platform.entity_id == 'binary_sensor.doorbell_front' }}"
-            sequence:
+            value: "{{ trigger.entity_id == 'binary_sensor.doorbell_front' }}"
+          sequence:
             - service: camera.snapshot
               entity_id: "{{ cameras[0] }}"
               data:
                 filename: "{{ snapshot_create_file_path }}"
       - conditions:
           - condition: template
-            value: "{{ trigger.platform.entity_id == 'binary_sensor.doorbell_back' }}"
-            sequence:
+            value: "{{ trigger.entity_id == 'binary_sensor.doorbell_back' }}"
+          sequence:
             - service: camera.snapshot
               entity_id: "{{ cameras[1] }}"
               data:
@@ -109,9 +108,7 @@ blueprint:
         target: "{{ device_list }}"
         title: "{{ notification_title }}"
         message: "{{ notification_message }}"
-        data: >-
-          {
-              "image": "%s",
-              "priority": "high",
-              "timeoutAfter": "10000"  # 10 seconds, adjust as needed
-          } | format(snapshot_access_file_path)
+        data:
+          image: "{{ snapshot_access_file_path }}"
+          priority: high
+          timeoutAfter: 10000  # 10 seconds, adjust as needed
