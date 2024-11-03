@@ -11,6 +11,11 @@ blueprint:
         entity:
           domain: binary_sensor
           multiple: true
+          filter:
+            include:
+              - domain: binary_sensor
+                attributes:
+                  device_class: doorbell  # Ensure only doorbell sensors are selectable
           
     google_devices:
       name: Google Devices
