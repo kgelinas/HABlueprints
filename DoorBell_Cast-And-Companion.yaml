@@ -1,22 +1,22 @@
 blueprint:
-  name: Doorbell Notification with Snapshot (Multiple Devices, Multiple Cameras)
-  description: Announce on Google devices and send camera snapshots to app when a doorbell is pressed.
+  name: Notification with Snapshot (Multiple Devices, Multiple Cameras)
+  description: Announce on Google devices and send camera snapshots to app when a specified entity changes state.
   domain: automation
 
   input:
-    doorbells:
-      name: Doorbells
-      description: Select the binary sensors representing your doorbells (multiple allowed).
+    monitored_entities:
+      name: Monitored Entities
+      description: Select the entities to monitor (multiple allowed).
       selector:
         entity:
-          domain: binary_sensor
           multiple: true
           filter:
             include:
-              - domain: binary_sensor
-                attributes:
-                  device_class: doorbell  # Ensure only doorbell sensors are selectable
-          
+              - domain: binary_sensor  # Include binary sensors (e.g., doorbells)
+              - domain: sensor         # Include other sensors if needed
+              - domain: switch         # Include switches if needed
+              # Add more domains as necessary, e.g., light, device_tracker, etc.
+
     google_devices:
       name: Google Devices
       description: The Google devices to make the announcement on (multiple allowed).
@@ -24,12 +24,12 @@ blueprint:
         entity:
           domain: media_player
           multiple: true
-          
+
     message:
       name: Message (Optional)
       description: "Default: \"There is Somebody at the Door!\""
       default: "There is Somebody at the Door!"
-      
+
     cameras:
       name: Cameras
       description: Select the cameras to use for snapshots (multiple allowed).
@@ -37,7 +37,7 @@ blueprint:
         entity:
           domain: camera
           multiple: true
-          
+
     notify_devices:
       name: Devices to Notify (Mobile App)
       description: Devices running the Home Assistant app to receive notifications (multiple allowed).
@@ -45,17 +45,17 @@ blueprint:
         device:
           integration: mobile_app
           multiple: true
-          
+
     notification_title:
       name: Notification Title (Optional)
       description: "Default: \"There is Somebody at the Door!\""
       default: "There is Somebody at the Door!"
-      
+
     notification_message:
       name: Notification Message (Optional)
       description: "Default: \"There is Somebody at the Door!\""
       default: "There is Somebody at the Door!"
-      
+
     delay:
       name: Delay (Optional)
       description: Wait before creating camera snapshot (in seconds).
@@ -71,7 +71,7 @@ mode: single
 
 trigger:
   - platform: state
-    entity_id: !input doorbells
+    entity_id: !input monitored_entities
     from: "off"
     to: "on"
 
@@ -104,18 +104,8 @@ action:
               entity_id: "{{ cameras[0] }}"
             data:
               filename: "{{ snapshot_create_file_path }}"
-      
-      - conditions:
-          - condition: template
-            value: "{{ trigger.entity_id == 'binary_sensor.doorbell_back' }}"
-        sequence:
-          - service: camera.snapshot
-            target:
-              entity_id: "{{ cameras[1] }}"
-            data:
-              filename: "{{ snapshot_create_file_path }}"
-      
-      # Add more conditions for additional doorbells and cameras as needed.
+
+      # Add more conditions for additional entities and corresponding camera actions as needed.
 
   - service: notify.mobile_app
     target:
