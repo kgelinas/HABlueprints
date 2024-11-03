@@ -15,7 +15,6 @@ blueprint:
               - domain: binary_sensor
               - domain: sensor
               - domain: switch
-              # Add more domains as necessary, e.g., light, device_tracker, etc.
 
     google_devices:
       name: Google Devices
