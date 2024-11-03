@@ -1,7 +1,8 @@
 blueprint:
   name: Doorbell Notification with Snapshot (Multiple Devices, Multiple Cameras)
-  description: Announce on Google devices and send camera snapshot to app when a doorbell is pressed.
+  description: Announce on Google devices and send camera snapshots to app when a doorbell is pressed.
   domain: automation
+
   input:
     doorbells:
       name: Doorbells
@@ -10,8 +11,7 @@ blueprint:
         entity:
           domain: binary_sensor
           multiple: true
-          filter:
-            - domain: binary_sensor
+          
     google_devices:
       name: Google Devices
       description: The Google devices to make the announcement on (multiple allowed).
@@ -19,12 +19,12 @@ blueprint:
         entity:
           domain: media_player
           multiple: true
-          filter:
-            - domain: media_player
+          
     message:
       name: Message (Optional)
       description: "Default: \"There is Somebody at the Door!\""
       default: "There is Somebody at the Door!"
+      
     cameras:
       name: Cameras
       description: Select the cameras to use for snapshots (multiple allowed).
@@ -32,8 +32,7 @@ blueprint:
         entity:
           domain: camera
           multiple: true
-          filter:
-            - domain: camera
+          
     notify_devices:
       name: Devices to Notify (Mobile App)
       description: Devices running the Home Assistant app to receive notifications (multiple allowed).
@@ -41,18 +40,21 @@ blueprint:
         device:
           integration: mobile_app
           multiple: true
+          
     notification_title:
-      name: Notification title (Optional)
+      name: Notification Title (Optional)
       description: "Default: \"There is Somebody at the Door!\""
       default: "There is Somebody at the Door!"
+      
     notification_message:
-      name: Notification message (Optional)
+      name: Notification Message (Optional)
       description: "Default: \"There is Somebody at the Door!\""
       default: "There is Somebody at the Door!"
+      
     delay:
       name: Delay (Optional)
-      description: Wait before creating camera snapshot
-      default: ""
+      description: Wait before creating camera snapshot (in seconds).
+      default: 0
       selector:
         number:
           min: 0
@@ -60,55 +62,63 @@ blueprint:
           unit_of_measurement: seconds
           mode: slider
 
-  trigger:
+mode: single
+
+trigger:
   - platform: state
-    entity_id: "{{ trigger.entity_id }}"
+    entity_id: !input doorbells
     from: "off"
     to: "on"
 
-  variable:
-    cameras: !input cameras
-    notify_devices: !input notify_devices
-    notification_title: !input notification_title
-    notification_message: !input notification_message
-    snapshot_create_file_path: "/config/www/tmp/snapshot_{{ trigger.entity_id.split('.')[-1] }}.jpg"
-    snapshot_access_file_path: "{{ snapshot_create_file_path | replace('/config/www','/local') }}"
+variables:
+  cameras: !input cameras
+  notify_devices: !input notify_devices
+  notification_title: !input notification_title
+  notification_message: !input notification_message
+  delay: !input delay
+  snapshot_create_file_path: "/config/www/tmp/snapshot_{{ trigger.entity_id.split('.')[-1] }}.jpg"
+  snapshot_access_file_path: "{{ snapshot_create_file_path | replace('/config/www','/local') }}"
 
-  action:
-    - service: tts.google_translate_say
-      data:
-        entity_id: "{{ input.google_device }}"
-        message: !input message
+action:
+  - service: tts.google_translate_say
+    data:
+      entity_id: !input google_devices
+      message: !input message
 
-    - delay: "{{ delay }}"
+  - delay:
+      seconds: "{{ delay }}"
 
-    - choose:
+  - choose:
       - conditions:
-          - condition: template
-            value: "{{ trigger.entity_id == 'binary_sensor.doorbell_front' }}"
-            sequence:
-            - service: camera.snapshot
+          - condition: state
+            entity_id: "{{ trigger.entity_id }}"
+            state: "on"
+        sequence:
+          - service: camera.snapshot
+            target:
               entity_id: "{{ cameras[0] }}"
-              data:
-                filename: "{{ snapshot_create_file_path }}"
+            data:
+              filename: "{{ snapshot_create_file_path }}"
+      
       - conditions:
           - condition: template
             value: "{{ trigger.entity_id == 'binary_sensor.doorbell_back' }}"
-            sequence:
-            - service: camera.snapshot
+        sequence:
+          - service: camera.snapshot
+            target:
               entity_id: "{{ cameras[1] }}"
-              data:
-                filename: "{{ snapshot_create_file_path }}"
-      # Add more conditions for additional doorbells and cameras as needed
+            data:
+              filename: "{{ snapshot_create_file_path }}"
+      
+      # Add more conditions for additional doorbells and cameras as needed.
 
-    - template: "{{ for device in notify_devices ~ ',' if loop.index > 0 }}{{ device }}{{ endfor }}"
-      variable_name: device_list
-
-    - mobile_app_notification:
-        target: "{{ device_list }}"
-        title: "{{ notification_title }}"
-        message: "{{ notification_message }}"
-        data:
-          image: "{{ snapshot_access_file_path }}"
-          priority: high
-          timeoutAfter: 10000  # 10 seconds, adjust as needed
+  - service: notify.mobile_app
+    target:
+      device_id: !input notify_devices
+    data:
+      title: "{{ notification_title }}"
+      message: "{{ notification_message }}"
+      data:
+        image: "{{ snapshot_access_file_path }}"
+        priority: high
+        timeoutAfter: 10000  # 10 seconds, adjust as needed
