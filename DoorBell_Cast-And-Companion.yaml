@@ -76,7 +76,7 @@ variables:
   notification_title: !input notification_title
   notification_message: !input notification_message
   delay: !input delay
-  snapshot_create_file_path: "/config/www/tmp/snapshot_{{ trigger.entity_id.split('.')[-1] }}.jpg"
+  snapshot_create_file_path: "/config/www/tmp/snapshot_{{ trigger.to_state.entity_id.split('.')[-1] }}.jpg"
   snapshot_access_file_path: "{{ snapshot_create_file_path | replace('/config/www','/local') }}"
 
 action:
@@ -91,15 +91,15 @@ action:
   - choose:
       - conditions:
           - condition: state
-            entity_id: "{{ trigger.entity_id }}"
+            entity_id: "{{ trigger.to_state.entity_id }}"
             state: "on"
         sequence:
           - service: camera.snapshot
             target:
               entity_id: >
-                {% if trigger.entity_id == 'binary_sensor.doorbell_front' %}
+                {% if trigger.to_state.entity_id == 'binary_sensor.doorbell_front' %}
                   {{ cameras[0] }}
-                {% elif trigger.entity_id == 'binary_sensor.doorbell_back' %}
+                {% elif trigger.to_state.entity_id == 'binary_sensor.doorbell_back' %}
                   {{ cameras[1] }}
                 {% else %}
                   {{ cameras[0] }}  # Fallback, can be adjusted as needed
@@ -116,4 +116,4 @@ action:
       data:
         image: "{{ snapshot_access_file_path }}"
         priority: high
-        timeoutAfter: 10000  # 10 seconds, adjust as needed
+        timeout: 10000  # 10 seconds, adjust as needed
