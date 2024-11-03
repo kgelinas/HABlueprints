@@ -78,6 +78,15 @@ variables:
   delay: !input delay
   snapshot_create_file_path: "/config/www/tmp/snapshot_{{ trigger.entity_id.split('.')[-1] }}.jpg"
   snapshot_access_file_path: "{{ snapshot_create_file_path | replace('/config/www','/local') }}"
+  camera_entity: >
+    {% if trigger.entity_id == 'binary_sensor.doorbell_front' %}
+      {{ cameras[0] }}
+    {% elif trigger.entity_id == 'binary_sensor.doorbell_back' %}
+      {{ cameras[1] }}
+    {% else %}
+      {{ cameras[0] }}  # Fallback, can be adjusted as needed
+    {% endif %}
+  camera_stream_url: "/lovelace-camera/{{ camera_entity.split('.')[-1] }}"
 
 action:
   - service: tts.google_translate_say
@@ -95,14 +104,7 @@ action:
         sequence:
           - service: camera.snapshot
             target:
-              entity_id: >
-                {% if trigger.entity_id == 'binary_sensor.doorbell_front' %}
-                  {{ cameras[0] }}
-                {% elif trigger.entity_id == 'binary_sensor.doorbell_back' %}
-                  {{ cameras[1] }}
-                {% else %}
-                  {{ cameras[0] }}  # Fallback, can be adjusted as needed
-                {% endif %}
+              entity_id: "{{ camera_entity }}"
             data:
               filename: "{{ snapshot_create_file_path }}"
 
@@ -114,5 +116,6 @@ action:
       message: "{{ notification_message }}"
       data:
         image: "{{ snapshot_access_file_path }}"
+        clickAction: "{{ camera_stream_url }}"
         priority: high
         timeout: 10000  # 10 seconds, adjust as needed
