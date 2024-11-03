@@ -96,21 +96,16 @@ action:
         sequence:
           - service: camera.snapshot
             target:
-              entity_id: "{{ cameras[0] }}"
+              entity_id: >
+                {% if trigger.entity_id == 'binary_sensor.doorbell_front' %}
+                  {{ cameras[0] }}
+                {% elif trigger.entity_id == 'binary_sensor.doorbell_back' %}
+                  {{ cameras[1] }}
+                {% else %}
+                  {{ cameras[0] }}  # Fallback, can be adjusted as needed
+                {% endif %}
             data:
               filename: "{{ snapshot_create_file_path }}"
-      
-      - conditions:
-          - condition: template
-            value: "{{ trigger.entity_id == 'binary_sensor.doorbell_back' }}"
-        sequence:
-          - service: camera.snapshot
-            target:
-              entity_id: "{{ cameras[1] }}"
-            data:
-              filename: "{{ snapshot_create_file_path }}"
-      
-      # Add more conditions for additional doorbells and cameras as needed.
 
   - service: notify.mobile_app
     target:
