@@ -78,15 +78,19 @@ variables:
   delay: !input delay
   snapshot_create_file_path: "/config/www/tmp/snapshot_{{ trigger.entity_id.split('.')[-1] }}.jpg"
   snapshot_access_file_path: "{{ snapshot_create_file_path | replace('/config/www','/local') }}"
+  
+  # Determine which camera to use based on the doorbell triggered
   camera_entity: >
-    {% if trigger.entity_id == 'binary_sensor.doorbell_front' %}
+    {% if trigger.entity_id == 'binary_sensor.doorbell_front' and cameras|length > 0 %}
       {{ cameras[0] }}
-    {% elif trigger.entity_id == 'binary_sensor.doorbell_back' %}
+    {% elif trigger.entity_id == 'binary_sensor.doorbell_back' and cameras|length > 1 %}
       {{ cameras[1] }}
     {% else %}
-      {{ cameras[0] }}  # Fallback, can be adjusted as needed
+      {{ cameras[0] if cameras|length > 0 else '' }}  # Fallback to the first camera if available
     {% endif %}
-  camera_stream_url: "/lovelace-camera/{{ camera_entity.split('.')[-1] }}"
+    
+  # Construct camera stream URL only if we have a valid camera_entity
+  camera_stream_url: "{{ '/lovelace-camera/' ~ camera_entity.split('.')[-1] if camera_entity }}"
 
 action:
   - service: tts.google_translate_say
