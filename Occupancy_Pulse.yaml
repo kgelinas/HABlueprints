@@ -1,0 +1,78 @@
+blueprint:
+  name: Occupancy Pulse
+  description: >
+    "Occupancy Pulse" is a versatile automation blueprint designed to track the occupancy status of a space
+    using multiple sensor entities such as motion sensors, door contacts, or other binary sensors. This blueprint
+    enables you to automate the process of determining whether a space is occupied and for how long, offering a smart
+    and dynamic solution to occupancy monitoring.
+
+    Once any of the configured occupancy sensors detect activity (e.g., motion is detected or a door is opened),
+    the blueprint triggers an `input_boolean` entity to reflect that the space is considered occupied. The `input_boolean`
+    stays in the "on" state for a configurable duration, allowing the room to be regarded as occupied even if no further
+    activity is detected.
+
+    This duration is fully customizable in 15-minute increments, with a range from 15 minutes to 4 hours. This flexibility
+    ensures that the automation adapts to different use cases, whether you want a short duration for a quick check or
+    a longer duration for spaces with less frequent activity.
+
+    Once the defined duration has passed, the blueprint automatically resets the `input_boolean` to "off," indicating
+    that the room is no longer occupied, even if the sensors did not report any further activity.
+
+    This blueprint is ideal for applications like:
+      - **Smart lighting**: Ensure lights stay on in an occupied room for a reasonable amount of time after motion is detected.
+      - **Climate control**: Keep heating or cooling running in a room while it's occupied, but turn off once the room is vacant.
+      - **Security systems**: Track whether a space is occupied to trigger security alerts or actions.
+
+    With its ability to manage occupancy state for a configurable duration, "Occupancy Pulse" provides an efficient
+    and flexible approach to occupancy monitoring, ensuring your home automation responds intelligently to the real-time
+    activity of the space.
+
+  domain: automation
+  input:
+    occupancy_entities:
+      name: Occupancy Entities
+      description: List of entities (motion sensors, door contacts, etc.) that detect occupancy in the space.
+      selector:
+        entity:
+          domain: binary_sensor
+          multiple: true
+
+    input_boolean_entity:
+      name: Input Boolean Entity
+      description: The input boolean that will represent the occupancy status of the space (on for occupied, off for vacant).
+      selector:
+        entity:
+          domain: input_boolean
+
+    duration:
+      name: Duration (in minutes)
+      description: The duration in minutes that the input boolean should remain "on" to indicate the space is occupied.
+        The value is configurable in 15-minute increments and can range from 15 minutes to 240 minutes (4 hours).
+      default: 15
+      selector:
+        number:
+          min: 15
+          max: 240
+          step: 15
+
+trigger:
+  - platform: state
+    entity_id: !input occupancy_entities
+    to: "on"
+
+action:
+  - choose:
+      - conditions:
+          - condition: state
+            entity_id: !input input_boolean_entity
+            state: "off"
+        sequence:
+          - service: input_boolean.turn_on
+            target:
+              entity_id: !input input_boolean_entity
+          - delay:
+              minutes: !input duration
+          - service: input_boolean.turn_off
+            target:
+              entity_id: !input input_boolean_entity
+    default: []

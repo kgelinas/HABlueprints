@@ -1,114 +1,70 @@
 blueprint:
-  name: Doorbell Notification with Snapshot (Multiple Devices, Multiple Cameras)
-  description: Announce on Google devices and send camera snapshot to app when a doorbell is pressed.
+  name: Multi-Sensor Occupancy Automation
+  description: Automate actions based on multiple Home Protect occupancy sensors.
   domain: automation
   input:
-    doorbells:
-      name: Doorbells
-      description: Select the binary sensors representing your doorbells (multiple allowed).
+    occupancy_sensors:
+      name: Occupancy Sensors
+      description: Select one or more occupancy sensors to monitor.
       selector:
-        entity:
-          domain: binary_sensor
-          multiple: true
-          filter:
-            - domain: binary_sensor
-    google_devices:
-      name: Google Devices
-      description: The Google devices to make the announcement on (multiple allowed).
+        target:
+          entity:
+            domain: binary_sensor
+            device_class: occupancy
+
+    action_occupied:
+      name: Action for Occupied State
+      description: Action to perform when any sensor detects occupancy.
+      default: []
       selector:
-        entity:
-          domain: media_player
-          multiple: true
-          filter:
-            - domain: media_player
-    message:
-      name: Message (Optional)
-      description: "Default: \"There is Somebody at the Door!\""
-      default: "There is Somebody at the Door!"
-    cameras:
-      name: Cameras
-      description: Select the cameras to use for snapshots (multiple allowed).
+        action: {}
+
+    action_unoccupied:
+      name: Action for Unoccupied State
+      description: Action to perform when all sensors report unoccupied.
+      default: []
       selector:
-        entity:
-          domain: camera
-          multiple: true
-          filter:
-            - domain: camera
-    notify_devices:
-      name: Devices to Notify (Mobile App)
-      description: Devices running the Home Assistant app to receive notifications (multiple allowed).
-      selector:
-        device:
-          integration: mobile_app
-          multiple: true
-    notification_title:
-      name: Notification title (Optional)
-      description: "Default: \"There is Somebody at the Door!\""
-      default: "There is Somebody at the Door!"
-    notification_message:
-      name: Notification message (Optional)
-      description: "Default: \"There is Somebody at the Door!\""
-      default: "There is Somebody at the Door!"
-    delay:
-      name: Delay (Optional)
-      description: Wait before creating camera snapshot
-      default: ""
+        action: {}
+
+    delay_unoccupied:
+      name: Unoccupied Delay
+      description: Time to wait after all sensors show unoccupied before running the unoccupied action.
+      default: 0
       selector:
         number:
           min: 0
-          max: 60
+          max: 3600
           unit_of_measurement: seconds
-          mode: slider
 
-  trigger:
+mode: restart
+
+trigger:
   - platform: state
-    entity_id: "{{ trigger.entity_id }}"
-    from: "off"
-    to: "on"
+    entity_id: !input occupancy_sensors
 
-  variable:
-    cameras: !input cameras
-    notify_devices: !input notify_devices
-    notification_title: !input notification_title
-    notification_message: !input notification_message
-    snapshot_create_file_path: "/config/www/tmp/snapshot_{{ trigger.entity_id.split('.')[-1] }}.jpg"
-    snapshot_access_file_path: "{{ snapshot_create_file_path | replace('/config/www','/local') }}"
+variables:
+  occupancy_sensors: !input occupancy_sensors
+  delay_unoccupied: !input delay_unoccupied
 
-  action:
-    - service: tts.google_translate_say
-      data:
-        entity_id: "{{ input.google_device }}"
-        message: !input message
+condition: []
 
-    - delay: "{{ delay }}"
-
-    - choose:
+action:
+  - choose:
       - conditions:
           - condition: template
-            value: "{{ trigger.entity_id == 'binary_sensor.doorbell_front' }}"
-            sequence:
-            - service: camera.snapshot
-              entity_id: "{{ cameras[0] }}"
-              data:
-                filename: "{{ snapshot_create_file_path }}"
+            value_template: >
+              {{ expand(occupancy_sensors.entity_id) | selectattr('state', 'eq', 'on') | list | length > 0 }}
+        sequence: !input action_occupied
       - conditions:
           - condition: template
-            value: "{{ trigger.entity_id == 'binary_sensor.doorbell_back' }}"
-            sequence:
-            - service: camera.snapshot
-              entity_id: "{{ cameras[1] }}"
-              data:
-                filename: "{{ snapshot_create_file_path }}"
-      # Add more conditions for additional doorbells and cameras as needed
-
-    - template: "{{ for device in notify_devices ~ ',' if loop.index > 0 }}{{ device }}{{ endfor }}"
-      variable_name: device_list
-
-    - mobile_app_notification:
-        target: "{{ device_list }}"
-        title: "{{ notification_title }}"
-        message: "{{ notification_message }}"
-        data:
-          image: "{{ snapshot_access_file_path }}"
-          priority: high
-          timeoutAfter: 10000  # 10 seconds, adjust as needed
+            value_template: >
+              {{ expand(occupancy_sensors.entity_id) | selectattr('state', 'eq', 'on') | list | length == 0 }}
+        sequence:
+          - delay:
+              seconds: "{{ delay_unoccupied }}"
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: >
+                      {{ expand(occupancy_sensors.entity_id) | selectattr('state', 'eq', 'on') | list | length == 0 }}
+                sequence: !input action_unoccupied
