@@ -1,34 +1,59 @@
 blueprint:
-  name: Multi-Sensor Occupancy Automation
-  description: Automate actions based on multiple Home Protect occupancy sensors.
+  name: Doorbell Notification with Snapshot (Multiple Devices, Multiple Cameras)
+  description: Announce on Google devices and send camera snapshots to app when a doorbell is pressed.
   domain: automation
+
   input:
     occupancy_sensors:
       name: Occupancy Sensors
       description: Select one or more occupancy sensors to monitor.
       selector:
-        target:
-          entity:
-            domain: binary_sensor
-            device_class: occupancy
-
-    action_occupied:
-      name: Action for Occupied State
-      description: Action to perform when any sensor detects occupancy.
-      default: []
+        entity:
+          domain: binary_sensor
+          multiple: true
+          
+    google_devices:
+      name: Google Devices
+      description: The Google devices to make the announcement on (multiple allowed).
       selector:
-        action: {}
-
-    action_unoccupied:
-      name: Action for Unoccupied State
-      description: Action to perform when all sensors report unoccupied.
-      default: []
+        entity:
+          domain: media_player
+          multiple: true
+          
+    message:
+      name: Message (Optional)
+      description: "Default: \"There is Somebody at the Door!\""
+      default: "There is Somebody at the Door!"
+      
+    cameras:
+      name: Cameras
+      description: Select the cameras to use for snapshots (multiple allowed).
       selector:
-        action: {}
-
-    delay_unoccupied:
-      name: Unoccupied Delay
-      description: Time to wait after all sensors show unoccupied before running the unoccupied action.
+        entity:
+          domain: camera
+          multiple: true
+          
+    notify_devices:
+      name: Devices to Notify (Mobile App)
+      description: Devices running the Home Assistant app to receive notifications (multiple allowed).
+      selector:
+        device:
+          integration: mobile_app
+          multiple: true
+          
+    notification_title:
+      name: Notification Title (Optional)
+      description: "Default: \"There is Somebody at the Door!\""
+      default: "There is Somebody at the Door!"
+      
+    notification_message:
+      name: Notification Message (Optional)
+      description: "Default: \"There is Somebody at the Door!\""
+      default: "There is Somebody at the Door!"
+      
+    delay:
+      name: Delay (Optional)
+      description: Wait before creating camera snapshot (in seconds).
       default: 0
       selector:
         number:
@@ -36,35 +61,66 @@ blueprint:
           max: 3600
           unit_of_measurement: seconds
 
-mode: restart
+mode: single
 
 trigger:
   - platform: state
-    entity_id: !input occupancy_sensors
+    entity_id: !input doorbells
+    from: "off"
+    to: "on"
 
 variables:
-  occupancy_sensors: !input occupancy_sensors
-  delay_unoccupied: !input delay_unoccupied
-
-condition: []
+  cameras: !input cameras
+  notify_devices: !input notify_devices
+  notification_title: !input notification_title
+  notification_message: !input notification_message
+  delay: !input delay
+  snapshot_create_file_path: "/config/www/tmp/snapshot_{{ trigger.entity_id.split('.')[-1] }}.jpg"
+  snapshot_access_file_path: "{{ snapshot_create_file_path | replace('/config/www','/local') }}"
+  
+  # Ensure a valid camera entity is chosen based on the doorbell triggered
+  camera_entity: >
+    {% if trigger.entity_id == 'binary_sensor.doorbell_front' and cameras|length > 0 %}
+      {{ cameras[0] }}
+    {% elif trigger.entity_id == 'binary_sensor.doorbell_back' and cameras|length > 1 %}
+      {{ cameras[1] }}
+    {% elif cameras|length > 0 %}
+      {{ cameras[0] }}  # Fallback to the first camera if available
+    {% else %}
+      ''  # Empty if no valid camera found
+    {% endif %}
+    
+  # Construct camera stream URL only if a valid camera_entity is found
+  camera_stream_url: "{{ '/lovelace-camera/' ~ camera_entity.split('.')[-1] if camera_entity }}"
 
 action:
+  - service: tts.google_translate_say
+    data:
+      entity_id: !input google_devices
+      message: !input message
+
+  - delay:
+      seconds: "{{ delay }}"
+
   - choose:
       - conditions:
           - condition: template
-            value_template: >
-              {{ expand(occupancy_sensors.entity_id) | selectattr('state', 'eq', 'on') | list | length > 0 }}
-        sequence: !input action_occupied
-      - conditions:
-          - condition: template
-            value_template: >
-              {{ expand(occupancy_sensors.entity_id) | selectattr('state', 'eq', 'on') | list | length == 0 }}
+            value_template: "{{ is_state(trigger.entity_id, 'on') }}"
         sequence:
-          - delay:
-              seconds: "{{ delay_unoccupied }}"
-          - choose:
-              - conditions:
-                  - condition: template
-                    value_template: >
-                      {{ expand(occupancy_sensors.entity_id) | selectattr('state', 'eq', 'on') | list | length == 0 }}
-                sequence: !input action_unoccupied
+          - service: camera.snapshot
+            target:
+              entity_id: "{{ camera_entity }}"
+            data:
+              filename: "{{ snapshot_create_file_path }}"
+
+  - service: notify.mobile_app
+    target:
+      device_id: !input notify_devices
+    data:
+      title: "{{ notification_title }}"
+      message: "{{ notification_message }}"
+      data:
+        image: "{{ snapshot_access_file_path }}"
+        clickAction: "{{ camera_stream_url }}"
+        priority: high
+        timeout: 10000  # 10 seconds, adjust as needed
